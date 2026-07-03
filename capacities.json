@@ -2,73 +2,61 @@
   {
     "base": "ANC",
     "seat": "CA",
-    "startCapacity": 151,
-    "delta": 0
+    "startCapacity": 143,
+    "delta": 4
   },
   {
     "base": "ANC",
     "seat": "FO",
-    "startCapacity": 149,
+    "startCapacity": 143,
     "delta": 0
   },
   {
     "base": "LAX",
     "seat": "CA",
-    "startCapacity": 219,
-    "delta": -33
+    "startCapacity": 266,
+    "delta": 0
   },
   {
     "base": "LAX",
     "seat": "FO",
-    "startCapacity": 204,
-    "delta": -28
+    "startCapacity": 227,
+    "delta": 0
   },
   {
     "base": "PDX",
     "seat": "CA",
     "startCapacity": 225,
-    "delta": 0
+    "delta": 6
   },
   {
     "base": "PDX",
     "seat": "FO",
-    "startCapacity": 230,
+    "startCapacity": 216,
     "delta": 0
   },
   {
     "base": "SEA",
     "seat": "CA",
-    "startCapacity": 761,
-    "delta": 0
+    "startCapacity": 756,
+    "delta": 10
   },
   {
     "base": "SEA",
     "seat": "FO",
-    "startCapacity": 684,
+    "startCapacity": 699,
     "delta": 0
   },
   {
     "base": "SFO",
     "seat": "CA",
-    "startCapacity": 170,
-    "delta": -17
+    "startCapacity": 196,
+    "delta": 0
   },
   {
     "base": "SFO",
     "seat": "FO",
-    "startCapacity": 165,
-    "delta": -15
+    "startCapacity": 196,
+    "delta": 0
   },
-  {
-    "base": "SAN",
-    "seat": "CA",
-    "startCapacity": 85,
-    "delta": 50
-  },
-  {
-    "base": "SAN",
-    "seat": "FO",
-    "startCapacity": 70,
-    "delta": 43
-  }
 ]
