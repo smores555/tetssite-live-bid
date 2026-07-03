@@ -11,11 +11,11 @@ function runBidEngine(data, deltaMap) {
     const is737 = (p) => p.current && p.current.equip === "737";
 
     // ── FIXED PILOT EXCLUSION LOGIC ──────────────────────────────────────────
-    const retiredSens = new Set(data.retired.map(p => p.sen || p.seniority));
-    const noBidSens   = new Set(data.noBid.map(p => p.sen || p.seniority));
+    // Retired pilots are expected to be included in the no-bid list.
+    const noBidSens = new Set(data.noBid.map(p => p.sen || p.seniority));
 
     const activeBidders = data.roster.filter(p =>
-        is737(p) && !retiredSens.has(p.sen) && !noBidSens.has(p.sen)
+        is737(p) && !noBidSens.has(p.sen)
     );
 
     // ── LABEL HELPERS ────────────────────────────────────────────────────────
