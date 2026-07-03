@@ -87,7 +87,7 @@
 </div>
 
 <script>
-let store = { roster: [], prefs: {}, caps: [], retired: [], noBid: [] };
+let store = { roster: [], prefs: {}, caps: [], noBid: [] };
 let lastResults = [];
 let lastTargetMap = {};
 let lastAuditTrail = [];
@@ -106,9 +106,9 @@ function exportToCSV(filename, rows) {
 
 window.onload = async () => {
     try {
-        const files = ['roster.json', 'preferences.json', 'capacities.json', 'retired_pilots.json', 'nobidpilots.json'];
+        const files = ['roster.json', 'preferences.json', 'capacities.json', 'nobidpilots.json'];
         const results = await Promise.all(files.map(async f => { const r = await fetch(f); return await r.json(); }));
-        store = { roster: results[0], prefs: results[1], caps: results[2], retired: results[3], noBid: results[4] };
+        store = { roster: results[0], prefs: results[1], caps: results[2], noBid: results[3] };
         renderCapacities();
     } catch (e) { document.body.innerHTML = `<div style="padding:40px; color:red">🚨 ERROR: ${e.message}</div>`; }
 };
