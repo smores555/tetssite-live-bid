@@ -14,6 +14,12 @@ function runBidEngine(data, deltaMap) {
     // Retired pilots are expected to be included in the no-bid list.
     const noBidSens = new Set(data.noBid.map(p => p.sen || p.seniority));
 
+    // Paper-bid pilots (on leave) still bid and can be awarded a vacancy at
+    // their seniority, but they never physically occupy it — they don't
+    // consume vacancies, don't count toward headcount/capacity, and can't
+    // force-displace (bump) anyone else.
+    const paperBidSens = new Set((data.paperBid || []).map(p => p.sen || p.seniority));
+
     const activeBidders = data.roster.filter(p =>
         is737(p) && !noBidSens.has(p.sen)
     );
@@ -52,12 +58,14 @@ function runBidEngine(data, deltaMap) {
     function fmtSource(src) {
         if (!src) return 'Source unknown.';
         if (src.type === 'pilot') return `Proffered from Sen #${src.sen} - ${src.name}.`;
+        if (src.type === 'paperbid') return src.label;
         return `Open position available (${src.label}).`;
     }
 
     // ── HEADCOUNT & TARGET MAP ───────────────────────────────────────────────
     let liveHeadcount = {};
     activeBidders.forEach(p => {
+        if (paperBidSens.has(p.sen)) return; // paper bidders don't occupy real capacity
         const key = `${p.current.base}-${p.current.seat}`.toUpperCase();
         liveHeadcount[key] = (liveHeadcount[key] || 0) + 1;
     });
@@ -104,6 +112,7 @@ function runBidEngine(data, deltaMap) {
             currentKey: pilotOrig,
             moved: false,
             isUnassigned: false,
+            isPaperBid: paperBidSens.has(p.sen),
             awardedPrefNum: "N/A",
             awardedReason: "Pending...",
             wasSelfDisplaced: false,
@@ -127,16 +136,17 @@ function runBidEngine(data, deltaMap) {
         let rank = 1;
         for (const other of bidders) {
             if (other.sen >= pilot.sen) break;
-            if (other.currentKey === key) rank++;
+            if (other.currentKey === key && !other.isPaperBid) rank++;
         }
         return rank > cap;
     }
 
     // ── HELPER: find the most junior pilot currently at a key ────────────────
+    // (paper bidders never physically occupy a seat, so they can't be bumped)
     function mostJuniorAt(key, excludeSen) {
         let junior = null;
         for (const other of bidders) {
-            if (other.currentKey === key && other.sen !== excludeSen) {
+            if (other.currentKey === key && other.sen !== excludeSen && !other.isPaperBid) {
                 if (!junior || other.sen > junior.sen) {
                     junior = other;
                 }
@@ -174,7 +184,7 @@ function runBidEngine(data, deltaMap) {
                 let count = 0;
                 for (const other of bidders) {
                     if (other.sen >= p.sen) break;
-                    if (other.currentKey === p.orig) {
+                    if (other.currentKey === p.orig && !other.isPaperBid) {
                         count++;
                         if (count === cap) { boundaryPilot = other; break; }
                     }
@@ -182,7 +192,7 @@ function runBidEngine(data, deltaMap) {
                 if (!boundaryPilot) {
                     for (const other of bidders) {
                         if (other.sen >= p.sen) break;
-                        if (other.currentKey === p.orig) boundaryPilot = other;
+                        if (other.currentKey === p.orig && !other.isPaperBid) boundaryPilot = other;
                     }
                 }
                 const minSen = boundaryPilot ? boundaryPilot.sen : p.sen;
@@ -200,11 +210,11 @@ function runBidEngine(data, deltaMap) {
                 let rank = 1;
                 for (const other of bidders) {
                     if (other.sen >= p.sen) break;
-                    if (other.currentKey === targetKey) rank++;
+                    if (other.currentKey === targetKey && !other.isPaperBid) rank++;
                 }
 
                 let vacancyOk;
-                if (forcedOut && isMovingIn) {
+                if (forcedOut && isMovingIn && !p.isPaperBid) {
                     const junior = mostJuniorAt(targetKey, p.sen);
                     vacancyOk = getVac(targetKey) > 0 || (junior !== null && p.sen < junior.sen);
                 } else {
@@ -232,7 +242,20 @@ function runBidEngine(data, deltaMap) {
                         const hasVac = getVac(targetKey) > 0;
                         let bumpedPilot = null;
 
-                        if (forcedOut && !hasVac) {
+                        if (p.isPaperBid) {
+                            log = {
+                                step: 'A',
+                                prefOrder: pr.order,
+                                fromKey: p.currentKey,
+                                toKey: targetKey,
+                                vacFromBefore: getVac(p.currentKey),
+                                vacToBefore: getVac(targetKey),
+                                source: { type: 'paperbid', label: 'Paper bid — on leave, does not consume vacancy' },
+                                displacementBump: false,
+                                paperBid: true,
+                                forcedOut
+                            };
+                        } else if (forcedOut && !hasVac) {
                             bumpedPilot = mostJuniorAt(targetKey, p.sen);
                             if (bumpedPilot && bumpedThisLoop.has(bumpedPilot.sen)) bumpedPilot = null;
                             if (bumpedPilot) {
@@ -288,7 +311,7 @@ function runBidEngine(data, deltaMap) {
                 let rank = 1;
                 for (const other of bidders) {
                     if (other.sen >= p.sen) break;
-                    if (other.currentKey === p.orig) rank++;
+                    if (other.currentKey === p.orig && !other.isPaperBid) rank++;
                 }
                 const selfBid  = p.prefs.find(pr => pr.targetKey === p.orig);
                 const bplLimit = selfBid ? selfBid.bpl : 9999;
@@ -329,11 +352,11 @@ function runBidEngine(data, deltaMap) {
                     let rank = 1;
                     for (const other of bidders) {
                         if (other.sen >= p.sen) break;
-                        if (other.currentKey === targetKey) rank++;
+                        if (other.currentKey === targetKey && !other.isPaperBid) rank++;
                     }
 
                     let vacancyOk;
-                    if (forcedOut && isMovingIn) {
+                    if (forcedOut && isMovingIn && !p.isPaperBid) {
                         const junior = mostJuniorAt(targetKey, p.sen);
                         vacancyOk = getVac(targetKey) > 0 || (junior !== null && p.sen < junior.sen);
                     } else {
@@ -348,7 +371,19 @@ function runBidEngine(data, deltaMap) {
                             const hasVac = getVac(targetKey) > 0;
                             let bumpedPilot = null;
 
-                            if (forcedOut && !hasVac) {
+                            if (p.isPaperBid) {
+                                log = {
+                                    step: 'C',
+                                    fromKey: p.currentKey,
+                                    toKey: targetKey,
+                                    vacFromBefore: getVac(p.currentKey),
+                                    vacToBefore: getVac(targetKey),
+                                    source: { type: 'paperbid', label: 'Paper bid — on leave, does not consume vacancy' },
+                                    displacementBump: false,
+                                    paperBid: true,
+                                    forcedOut
+                                };
+                            } else if (forcedOut && !hasVac) {
                                 bumpedPilot = mostJuniorAt(targetKey, p.sen);
                                 if (bumpedPilot && bumpedThisLoop.has(bumpedPilot.sen)) bumpedPilot = null;
                                 if (bumpedPilot) {
@@ -395,7 +430,7 @@ function runBidEngine(data, deltaMap) {
                 let rank = 1;
                 for (const other of bidders) {
                     if (other.sen >= p.sen) break;
-                    if (other.currentKey === p.orig) rank++;
+                    if (other.currentKey === p.orig && !other.isPaperBid) rank++;
                 }
                 const selfBid = p.prefs.find(pr => pr.targetKey === p.orig);
                 selfDisp = selfBid && rank > selfBid.bpl;
@@ -420,12 +455,14 @@ function runBidEngine(data, deltaMap) {
             if (newSeat !== p.currentKey) {
                 const prevKey = p.currentKey; // capture BEFORE updating
 
-                if (p.currentKey !== "UNASSIGNED") {
-                    releaseSlot(p.currentKey, p.sen, p.name);
-                    currentCounts[p.currentKey]--;
-                }
-                if (newSeat !== "UNASSIGNED") {
-                    currentCounts[newSeat] = (currentCounts[newSeat] || 0) + 1;
+                if (!p.isPaperBid) {
+                    if (p.currentKey !== "UNASSIGNED") {
+                        releaseSlot(p.currentKey, p.sen, p.name);
+                        currentCounts[p.currentKey]--;
+                    }
+                    if (newSeat !== "UNASSIGNED") {
+                        currentCounts[newSeat] = (currentCounts[newSeat] || 0) + 1;
+                    }
                 }
 
                 p.currentKey   = newSeat;
@@ -460,7 +497,9 @@ function runBidEngine(data, deltaMap) {
 
         if (log.step === 'A' && !log.stayed) {
             const line1 = `${sec24Prefix}Awarded Pref #${log.prefOrder} \u2014 ${posLabel(log.toKey)}. ${fmtSource(log.source)}${bumpNote}`;
-            const line2 = log.displacementBump
+            const line2 = log.paperBid
+                ? `Paper bid \u2014 no vacancy consumed, no headcount change. Pilot remains on leave.`
+                : log.displacementBump
                 ? `Displacement move \u2014 no vacancy consumed in ${keyLabel(log.toKey)}. Increase vacancy in ${keyLabel(log.fromKey)} from ${log.vacFromBefore} to ${log.vacFromBefore + 1}.`
                 : `Reduce vacancy in ${keyLabel(log.toKey)} from ${log.vacToBefore} to ${log.vacToBefore - 1}. Increase vacancy in ${keyLabel(log.fromKey)} from ${log.vacFromBefore} to ${log.vacFromBefore + 1}.`;
             return line1 + '\n' + line2;
@@ -470,7 +509,9 @@ function runBidEngine(data, deltaMap) {
             return `Remain in current position.`;
         } else if (log.step === 'C') {
             const line1 = `Section 24 Displacement \u2014 ${posLabel(log.toKey)}. ${fmtSource(log.source)}${bumpNote}`;
-            const line2 = log.displacementBump
+            const line2 = log.paperBid
+                ? `Paper bid \u2014 no vacancy consumed, no headcount change. Pilot remains on leave.`
+                : log.displacementBump
                 ? `Displacement move \u2014 no vacancy consumed in ${keyLabel(log.toKey)}. Increase vacancy in ${keyLabel(log.fromKey)} from ${log.vacFromBefore} to ${log.vacFromBefore + 1}.`
                 : `Reduce vacancy in ${keyLabel(log.toKey)} from ${log.vacToBefore} to ${log.vacToBefore - 1}. Increase vacancy in ${keyLabel(log.fromKey)} from ${log.vacFromBefore} to ${log.vacFromBefore + 1}.`;
             return line1 + '\n' + line2;
