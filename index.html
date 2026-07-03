@@ -65,6 +65,7 @@
         <button id="expBase" class="btn">XLSX: BASE LIST</button>
         <button id="expMaster" class="btn">XLSX: MASTER AWARDS</button>
         <button id="expLog" class="btn">XLSX: TRANSACTION LOG</button>
+        <button id="expFinal" class="btn">CSV: FINAL AWARDS SHEET</button>
         <div style="flex-grow:1"></div>
         <input type="number" id="lookupInput" style="padding:10px; background:#0d1117; color:white; border:1px solid var(--border); border-radius:6px; width:120px;" placeholder="Sen #">
         <button id="lookupBtn" class="btn">LOOKUP</button>
@@ -637,6 +638,49 @@ document.getElementById('expLog').onclick = () => {
     ws['!rows'] = [{ hpt: 18 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Transaction Log');
     XLSX.writeFile(wb, 'transaction_log.xlsx', { cellStyles: true });
+};
+
+document.getElementById('expFinal').onclick = () => {
+    if (!lastResults.length) { alert('Run the bid engine first.'); return; }
+
+    const is737 = (p) => p.current && p.current.equip === '737';
+
+    function fmtPos(key) {
+        if (!key || key === 'UNASSIGNED') return 'N/A';
+        return '737 ' + key.replace('-', ' ');
+    }
+
+    const noBidSens = new Set((store.noBid || []).map(p => p.sen || p.seniority));
+
+    // Active bidders come from the engine's output (lastResults).
+    const rows = lastResults.map(p => {
+        const origPos  = fmtPos(p.orig);
+        const finalPos = p.isUnassigned ? 'N/A' : fmtPos(p.currentKey);
+        const prefNum  = p.awardedPrefNum !== 'N/A' ? p.awardedPrefNum : 1;
+        return [p.sen, p.name, 'ACTIVE', origPos, finalPos, prefNum];
+    });
+
+    // No-bid pilots aren't run through the engine, so pull them straight from
+    // the roster: they hold their current position with preference #1.
+    store.roster.filter(p => is737(p) && noBidSens.has(p.sen)).forEach(p => {
+        const key = `${p.current.base}-${p.current.seat}`.toUpperCase();
+        const pos = fmtPos(key);
+        rows.push([p.sen, p.name, 'NO BID', pos, pos, 1]);
+    });
+
+    rows.sort((a, b) => a[0] - b[0]);
+
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const sheetRows = [
+        ['737 Master Bid Results', '', '', '', '', ''],
+        [`Awarded ${today}`, '', '', '', '', ''],
+        ['Anyone with N/A as their Current or Awarded Position has a position that no longer exists and will fall under CBA Section 24.K upon their return', '', '', '', '', ''],
+        ['Seniority', 'Pilot_Name', 'Bid_Type', 'Current_Position', 'Awarded_Position', 'Awarded_Preference'],
+        ...rows
+    ];
+
+    exportToCSV('final_awards_sheet.csv', sheetRows);
 };
 </script>
 </body>
